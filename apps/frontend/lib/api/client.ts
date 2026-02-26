@@ -5,7 +5,9 @@
  */
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-export const API_BASE = `${API_URL}/api/v1`;
+// Route all API calls through the Next.js proxy (/api_be/* → backend) to avoid CORS.
+// The proxy destination is configured in next.config.ts using NEXT_PUBLIC_API_URL.
+export const API_BASE = '/api_be/api/v1';
 
 export function getAuthHeader(): Record<string, string> {
   if (typeof window === 'undefined') return {};
