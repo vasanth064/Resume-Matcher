@@ -135,6 +135,11 @@ class Settings(BaseSettings):
             return "openai"
         return v
 
+    # Telegram Bot
+    telegram_bot_token: str = ""
+    telegram_webhook_secret: str = ""
+    telegram_webhook_url: str = ""
+
     # Server Configuration
     host: str = "0.0.0.0"
     port: int = 8000
