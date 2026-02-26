@@ -3,25 +3,23 @@
 import logging
 from datetime import datetime, timedelta, timezone
 
+import bcrypt
 from fastapi import HTTPException
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 def hash_password(password: str) -> str:
     """Hash a plain-text password using bcrypt."""
-    return _pwd_context.hash(password)
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
 def verify_password(plain: str, hashed: str) -> bool:
     """Verify a plain-text password against a bcrypt hash."""
-    return _pwd_context.verify(plain, hashed)
+    return bcrypt.checkpw(plain.encode(), hashed.encode())
 
 
 def _create_token(user_id: str, token_type: str, expires_delta: timedelta) -> str:
