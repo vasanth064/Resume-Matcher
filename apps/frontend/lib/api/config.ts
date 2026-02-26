@@ -350,6 +350,37 @@ export async function clearAllApiKeys(): Promise<void> {
   }
 }
 
+// Telegram configuration
+export interface TelegramConfig {
+  telegram_bot_token: string;
+  telegram_webhook_url: string;
+}
+
+export interface TelegramConfigUpdate {
+  telegram_bot_token?: string;
+  telegram_webhook_secret?: string;
+  telegram_webhook_url?: string;
+}
+
+export async function updateTelegramConfig(config: TelegramConfigUpdate): Promise<TelegramConfig> {
+  const res = await apiFetch('/auth/me', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config),
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `Failed to update Telegram config (status ${res.status}).`);
+  }
+
+  const profile = await res.json();
+  return {
+    telegram_bot_token: profile.telegram_bot_token || '',
+    telegram_webhook_url: profile.telegram_webhook_url || '',
+  };
+}
+
 // Reset database
 export async function resetDatabase(): Promise<void> {
   const res = await apiFetch('/config/reset', {

@@ -11,6 +11,7 @@ import {
   updateFeatureConfig,
   fetchPromptConfig,
   updatePromptConfig,
+  updateTelegramConfig,
   clearAllApiKeys,
   resetDatabase,
   PROVIDER_INFO,
@@ -47,9 +48,12 @@ import {
   Globe,
   Trash2,
   AlertTriangle,
+  LogOut,
+  MessageSquare,
 } from 'lucide-react';
 import { useLanguage } from '@/lib/context/language-context';
 import { useTranslations } from '@/lib/i18n';
+import { useAuth } from '@/lib/context/auth-context';
 import type { SupportedLanguage } from '@/lib/api/config';
 import type { Locale } from '@/i18n/config';
 
@@ -130,6 +134,26 @@ export default function SettingsPage() {
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const [successMessage, setSuccessDialogMessage] = useState({ title: '', description: '' });
   const [isResetting, setIsResetting] = useState(false);
+
+  // Auth
+  const { user, logout, refreshUser } = useAuth();
+
+  // Telegram state
+  const [telegramBotToken, setTelegramBotToken] = useState('');
+  const [telegramWebhookSecret, setTelegramWebhookSecret] = useState('');
+  const [telegramWebhookUrl, setTelegramWebhookUrl] = useState('');
+  const [hasTelegramConfig, setHasTelegramConfig] = useState(false);
+  const [telegramStatus, setTelegramStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [telegramError, setTelegramError] = useState<string | null>(null);
+  const [showDisconnectTelegramDialog, setShowDisconnectTelegramDialog] = useState(false);
+
+  // Populate Telegram state from user profile
+  useEffect(() => {
+    if (user) {
+      setHasTelegramConfig(Boolean(user.telegram_bot_token));
+      setTelegramWebhookUrl(user.telegram_webhook_url || '');
+    }
+  }, [user]);
 
   // Language settings
   const {
@@ -486,6 +510,52 @@ export default function SettingsPage() {
     }
   };
 
+  // Save Telegram configuration
+  const handleTelegramSave = async () => {
+    setTelegramStatus('saving');
+    setTelegramError(null);
+    try {
+      const updates: Record<string, string> = {};
+      if (telegramBotToken.trim()) updates.telegram_bot_token = telegramBotToken.trim();
+      if (telegramWebhookSecret.trim()) updates.telegram_webhook_secret = telegramWebhookSecret.trim();
+      updates.telegram_webhook_url = telegramWebhookUrl.trim();
+
+      await updateTelegramConfig(updates);
+      await refreshUser();
+      setTelegramBotToken('');
+      setTelegramWebhookSecret('');
+      setTelegramStatus('saved');
+      setTimeout(() => setTelegramStatus('idle'), 2000);
+    } catch (err) {
+      setTelegramError((err as Error).message || 'Failed to save Telegram config');
+      setTelegramStatus('error');
+    }
+  };
+
+  // Disconnect Telegram (clear all fields)
+  const handleTelegramDisconnect = async () => {
+    setTelegramStatus('saving');
+    setTelegramError(null);
+    try {
+      await updateTelegramConfig({
+        telegram_bot_token: '',
+        telegram_webhook_secret: '',
+        telegram_webhook_url: '',
+      });
+      setTelegramBotToken('');
+      setTelegramWebhookSecret('');
+      setTelegramWebhookUrl('');
+      await refreshUser();
+      setTelegramStatus('saved');
+      setTimeout(() => setTelegramStatus('idle'), 2000);
+    } catch (err) {
+      setTelegramError((err as Error).message || 'Failed to disconnect Telegram');
+      setTelegramStatus('error');
+    } finally {
+      setShowDisconnectTelegramDialog(false);
+    }
+  };
+
   // Format last fetched time for display
   const formatLastFetched = () => {
     if (!lastFetched) return t('settings.systemStatus.lastFetched.never');
@@ -520,12 +590,23 @@ export default function SettingsPage() {
               {t('settings.subtitle')}
             </p>
           </div>
-          <Link href="/dashboard">
-            <Button variant="outline" size="sm">
-              <ArrowLeft className="w-4 h-4" />
-              {t('common.back')}
+          <div className="flex items-center gap-2">
+            <Link href="/dashboard">
+              <Button variant="outline" size="sm">
+                <ArrowLeft className="w-4 h-4" />
+                {t('common.back')}
+              </Button>
+            </Link>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={logout}
+              className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800 hover:border-red-300"
+            >
+              <LogOut className="w-4 h-4" />
+              Logout
             </Button>
-          </Link>
+          </div>
         </div>
 
         <div className="p-8 space-y-10">
@@ -1013,6 +1094,125 @@ export default function SettingsPage() {
             </div>
           </section>
 
+          {/* Telegram Integration */}
+          <section className="space-y-6">
+            <div className="flex items-center justify-between border-b border-black/10 pb-2">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="w-4 h-4" />
+                <h2 className="font-mono text-sm font-bold uppercase tracking-wider">
+                  Telegram Integration
+                </h2>
+              </div>
+              {hasTelegramConfig && (
+                <span className="font-mono text-xs text-green-700 bg-green-50 border border-green-300 px-2 py-0.5 uppercase tracking-wide">
+                  Connected
+                </span>
+              )}
+            </div>
+
+            <p className="text-sm text-gray-600">
+              Connect a Telegram bot to interact with Resume Matcher via chat. All three fields are
+              required to activate the integration.
+            </p>
+
+            <div className="grid gap-6">
+              {/* Bot Token */}
+              <div className="space-y-2">
+                <Label htmlFor="tg-token">
+                  Bot Token{' '}
+                  {hasTelegramConfig && (
+                    <span className="text-gray-400 font-normal">(configured)</span>
+                  )}
+                </Label>
+                <Input
+                  id="tg-token"
+                  type="password"
+                  value={telegramBotToken}
+                  onChange={(e) => setTelegramBotToken(e.target.value)}
+                  placeholder={hasTelegramConfig ? 'Leave blank to keep existing token' : '1234567890:AAF...'}
+                  className="font-mono"
+                />
+                {hasTelegramConfig && !telegramBotToken && (
+                  <p className="text-xs text-gray-500 font-mono">Leave blank to keep existing token</p>
+                )}
+              </div>
+
+              {/* Webhook Secret */}
+              <div className="space-y-2">
+                <Label htmlFor="tg-secret">
+                  Webhook Secret{' '}
+                  {hasTelegramConfig && (
+                    <span className="text-gray-400 font-normal">(configured)</span>
+                  )}
+                </Label>
+                <Input
+                  id="tg-secret"
+                  type="password"
+                  value={telegramWebhookSecret}
+                  onChange={(e) => setTelegramWebhookSecret(e.target.value)}
+                  placeholder={hasTelegramConfig ? 'Leave blank to keep existing secret' : 'random-secret'}
+                  className="font-mono"
+                />
+              </div>
+
+              {/* Webhook URL */}
+              <div className="space-y-2">
+                <Label htmlFor="tg-url">Webhook URL</Label>
+                <Input
+                  id="tg-url"
+                  value={telegramWebhookUrl}
+                  onChange={(e) => setTelegramWebhookUrl(e.target.value)}
+                  placeholder="https://yourdomain.com"
+                  className="font-mono"
+                />
+                <p className="text-xs text-gray-500 font-mono">
+                  Public URL where Telegram sends webhook events to your deployment
+                </p>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex gap-4">
+                <Button
+                  onClick={handleTelegramSave}
+                  disabled={telegramStatus === 'saving'}
+                  className="flex-1"
+                >
+                  {telegramStatus === 'saving' ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : telegramStatus === 'saved' ? (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      Saved
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      Save Telegram Config
+                    </>
+                  )}
+                </Button>
+                {hasTelegramConfig && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowDisconnectTelegramDialog(true)}
+                    disabled={telegramStatus === 'saving'}
+                    className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800 hover:border-red-300"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Disconnect
+                  </Button>
+                )}
+              </div>
+
+              {/* Telegram error */}
+              {telegramError && (
+                <div className="border border-red-300 bg-red-50 p-3">
+                  <p className="text-xs text-red-600 font-mono">{telegramError}</p>
+                </div>
+              )}
+            </div>
+          </section>
+
           {/* Danger Zone */}
           <section className="space-y-6">
             <div className="flex items-center gap-2 border-b border-red-200 pb-2">
@@ -1107,6 +1307,16 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={showDisconnectTelegramDialog}
+        onOpenChange={setShowDisconnectTelegramDialog}
+        title="Disconnect Telegram"
+        description="This will remove your Telegram bot token, webhook secret, and webhook URL. The bot will stop receiving messages."
+        confirmLabel="Disconnect"
+        variant="warning"
+        onConfirm={handleTelegramDisconnect}
+      />
 
       <ConfirmDialog
         open={showClearApiKeysDialog}
