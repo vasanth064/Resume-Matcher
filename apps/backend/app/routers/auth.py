@@ -11,7 +11,9 @@ from app.auth import (
     hash_password,
     verify_password,
 )
+from app.config import settings
 from app.database import db
+from app.services.telegram import TelegramClient
 from app.dependencies import get_current_user
 from app.schemas.auth import (
     LoginRequest,
@@ -40,6 +42,14 @@ def _mask_api_key(key: str) -> str:
 
 def _user_to_profile(user: dict) -> UserProfile:
     """Convert a user document to the public profile schema."""
+    # Compute the personal webhook URL from global env config + user_id
+    webhook_url = ""
+    if settings.telegram_webhook_url:
+        webhook_url = (
+            f"{settings.telegram_webhook_url.rstrip('/')}"
+            f"/webhook/telegram/{user['user_id']}"
+        )
+
     return UserProfile(
         user_id=user["user_id"],
         email=user["email"],
@@ -48,7 +58,7 @@ def _user_to_profile(user: dict) -> UserProfile:
         llm_api_key=_mask_api_key(user.get("llm_api_key", "")),
         llm_api_base=user.get("llm_api_base"),
         telegram_bot_token=user.get("telegram_bot_token", ""),
-        telegram_webhook_url=user.get("telegram_webhook_url", ""),
+        telegram_webhook_url=webhook_url,
         enable_cover_letter=user.get("enable_cover_letter", False),
         enable_outreach_message=user.get("enable_outreach_message", False),
         ui_language=user.get("ui_language", "en"),
@@ -155,4 +165,32 @@ async def update_me(
         return _user_to_profile(current_user)
 
     updated_user = db.update_user(current_user["user_id"], updates)
+
+    # Auto-register Telegram webhook when bot token is saved
+    if "telegram_bot_token" in updates and settings.telegram_webhook_url:
+        token = updates["telegram_bot_token"]
+        if token:
+            webhook_url = (
+                f"{settings.telegram_webhook_url.rstrip('/')}"
+                f"/webhook/telegram/{current_user['user_id']}"
+            )
+            try:
+                tg = TelegramClient(token)
+                await tg.set_webhook(
+                    webhook_url,
+                    settings.telegram_webhook_secret or None,
+                )
+                await tg.close()
+                logger.info(
+                    "Telegram webhook registered for user %s: %s",
+                    current_user["user_id"],
+                    webhook_url,
+                )
+            except Exception as e:
+                logger.error(
+                    "Failed to register Telegram webhook for user %s: %s",
+                    current_user["user_id"],
+                    e,
+                )
+
     return _user_to_profile(updated_user)

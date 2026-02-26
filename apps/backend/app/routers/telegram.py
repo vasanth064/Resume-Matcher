@@ -9,14 +9,12 @@ from fastapi import APIRouter, Header, Request, Response
 
 from app.config import settings
 from app.database import db
+from app.llm import LLMConfig, set_request_llm_config
 from app.services.telegram import TelegramClient
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Telegram"])
-
-# Module-level client, initialized during app lifespan
-_client: TelegramClient | None = None
 
 WELCOME_MESSAGE = (
     "Welcome to Resume Matcher Bot!\n\n"
@@ -50,38 +48,34 @@ ERROR_MESSAGE = "Something went wrong while processing your request. Please try 
 MIN_JD_LENGTH = 50
 
 
-def get_client() -> TelegramClient | None:
-    """Get the module-level Telegram client."""
-    return _client
-
-
-def set_client(client: TelegramClient | None) -> None:
-    """Set the module-level Telegram client."""
-    global _client
-    _client = client
-
-
-@router.post("/webhook/telegram")
+@router.post("/webhook/telegram/{user_id}")
 async def telegram_webhook(
+    user_id: str,
     request: Request,
     x_telegram_bot_api_secret_token: str | None = Header(None),
 ) -> Response:
-    """Handle incoming Telegram webhook updates."""
-    # Validate secret token if configured
+    """Handle incoming Telegram webhook updates for a specific user."""
+    # Look up the user
+    user = db.get_user(user_id)
+    if not user:
+        logger.warning("Telegram webhook: unknown user_id %s", user_id)
+        return Response(status_code=200)
+
+    bot_token = user.get("telegram_bot_token", "")
+    if not bot_token:
+        logger.warning("Telegram webhook: user %s has no bot token configured", user_id)
+        return Response(status_code=200)
+
+    # Validate secret token against the global env-configured secret
     if settings.telegram_webhook_secret:
         if x_telegram_bot_api_secret_token != settings.telegram_webhook_secret:
-            logger.warning("Telegram webhook: invalid secret token")
+            logger.warning("Telegram webhook: invalid secret token for user %s", user_id)
             return Response(status_code=403)
-
-    client = get_client()
-    if not client:
-        logger.error("Telegram webhook received but client not initialized")
-        return Response(status_code=200)
 
     try:
         body = await request.json()
     except Exception:
-        logger.warning("Telegram webhook: invalid JSON body")
+        logger.warning("Telegram webhook: invalid JSON body for user %s", user_id)
         return Response(status_code=200)
 
     # Extract message
@@ -94,20 +88,36 @@ async def telegram_webhook(
     if not chat_id or not text:
         return Response(status_code=200)
 
-    # Always respond 200 quickly to Telegram, process in the handler
+    # Set per-request LLM config from this user's stored settings
+    set_request_llm_config(
+        LLMConfig(
+            provider=user.get("llm_provider", "openai"),
+            model=user.get("llm_model", ""),
+            api_key=user.get("llm_api_key", ""),
+            api_base=user.get("llm_api_base"),
+        )
+    )
+
+    # Create a per-request TelegramClient using the user's bot token
+    client = TelegramClient(bot_token)
+
     try:
-        await _handle_message(client, chat_id, text)
+        await _handle_message(client, chat_id, text, user_id)
     except Exception as e:
-        logger.error("Telegram message handler failed: %s", e, exc_info=True)
+        logger.error("Telegram message handler failed for user %s: %s", user_id, e, exc_info=True)
         try:
             await client.send_message(chat_id, ERROR_MESSAGE)
         except Exception:
-            logger.error("Failed to send error message to Telegram")
+            logger.error("Failed to send error message to Telegram for user %s", user_id)
+    finally:
+        await client.close()
 
     return Response(status_code=200)
 
 
-async def _handle_message(client: TelegramClient, chat_id: int, text: str) -> None:
+async def _handle_message(
+    client: TelegramClient, chat_id: int, text: str, user_id: str
+) -> None:
     """Route incoming message to the appropriate handler."""
     if text == "/start":
         await client.send_message(chat_id, WELCOME_MESSAGE)
@@ -122,11 +132,14 @@ async def _handle_message(client: TelegramClient, chat_id: int, text: str) -> No
         return
 
     # Treat as job description — run the tailoring pipeline
-    await _tailor_and_send(client, chat_id, text)
+    await _tailor_and_send(client, chat_id, text, user_id)
 
 
-async def _tailor_and_send(client: TelegramClient, chat_id: int, jd_text: str) -> None:
+async def _tailor_and_send(
+    client: TelegramClient, chat_id: int, jd_text: str, user_id: str
+) -> None:
     """Run the full tailoring pipeline and send results back."""
+    from app.config import settings
     from app.pdf import render_resume_pdf
     from app.services.cover_letter import (
         generate_cover_letter,
@@ -139,8 +152,8 @@ async def _tailor_and_send(client: TelegramClient, chat_id: int, jd_text: str) -
         refine_resume,
     )
 
-    # Step 1: Get master resume
-    master_resume = db.get_master_resume()
+    # Step 1: Get this user's master resume
+    master_resume = db.get_master_resume(user_id)
     if not master_resume or not master_resume.get("processed_data"):
         await client.send_message(chat_id, NO_MASTER_RESUME_MESSAGE)
         return
@@ -150,8 +163,8 @@ async def _tailor_and_send(client: TelegramClient, chat_id: int, jd_text: str) -
 
     await client.send_message(chat_id, PROCESSING_MESSAGE)
 
-    # Step 2: Create job record
-    job = db.create_job(content=jd_text, resume_id=resume_id)
+    # Step 2: Create job record scoped to this user
+    job = db.create_job(content=jd_text, user_id=user_id, resume_id=resume_id)
     job_id = job["job_id"]
 
     # Step 3: Extract keywords
@@ -190,10 +203,11 @@ async def _tailor_and_send(client: TelegramClient, chat_id: int, jd_text: str) -
     await client.send_chat_action(chat_id, "typing")
     cover_letter = await generate_cover_letter(improved_data, jd_text)
 
-    # Step 9: Save to DB
+    # Step 9: Save to DB scoped to this user
     improved_text = json.dumps(improved_data, indent=2)
     tailored_resume = db.create_resume(
         content=improved_text,
+        user_id=user_id,
         content_type="json",
         filename=f"telegram_tailored_{job_id}",
         is_master=False,
@@ -213,6 +227,7 @@ async def _tailor_and_send(client: TelegramClient, chat_id: int, jd_text: str) -
         tailored_resume_id=tailored_resume_id,
         job_id=job_id,
         improvements=improvements,
+        user_id=user_id,
     )
 
     # Step 10: Render PDF
@@ -224,7 +239,6 @@ async def _tailor_and_send(client: TelegramClient, chat_id: int, jd_text: str) -
     pdf_bytes = await render_resume_pdf(print_url, "A4")
 
     # Step 11: Send results
-    # Build summary caption
     keywords_injected = (
         len(refinement_result.keyword_analysis.injectable_keywords)
         if refinement_result.keyword_analysis

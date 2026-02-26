@@ -14,6 +14,15 @@ const LLM_PROVIDERS = [
   { value: 'ollama', label: 'Ollama (local)' },
 ];
 
+const DEFAULT_MODELS: Record<string, string> = {
+  openai: 'gpt-4o-mini',
+  anthropic: 'claude-haiku-4-5-20251001',
+  gemini: 'gemini/gemini-2.0-flash-lite',
+  openrouter: 'openrouter/auto',
+  deepseek: 'deepseek-chat',
+  ollama: 'llama3.2',
+};
+
 type Step = 1 | 2 | 3;
 
 export default function SignupPage() {
@@ -30,20 +39,23 @@ export default function SignupPage() {
 
   // Step 2: LLM
   const [llmProvider, setLlmProvider] = useState('openai');
-  const [llmModel, setLlmModel] = useState('');
+  const [llmModel, setLlmModel] = useState(DEFAULT_MODELS['openai']);
   const [llmApiKey, setLlmApiKey] = useState('');
   const [llmApiBase, setLlmApiBase] = useState('');
 
   // Step 3: Telegram (optional)
   const [telegramBotToken, setTelegramBotToken] = useState('');
-  const [telegramWebhookSecret, setTelegramWebhookSecret] = useState('');
-  const [telegramWebhookUrl, setTelegramWebhookUrl] = useState('');
 
   function validateStep1(): string | null {
     if (!email || !password) return 'Email and password are required';
     if (password.length < 8) return 'Password must be at least 8 characters';
     if (password !== confirmPassword) return 'Passwords do not match';
     return null;
+  }
+
+  function handleProviderChange(provider: string) {
+    setLlmProvider(provider);
+    setLlmModel(DEFAULT_MODELS[provider] ?? '');
   }
 
   function validateStep2(): string | null {
@@ -84,8 +96,6 @@ export default function SignupPage() {
           llm_api_key: llmApiKey,
           llm_api_base: llmApiBase || null,
           telegram_bot_token: telegramBotToken,
-          telegram_webhook_secret: telegramWebhookSecret,
-          telegram_webhook_url: telegramWebhookUrl,
         }),
       });
 
@@ -221,7 +231,7 @@ export default function SignupPage() {
               <select
                 id="llm-provider"
                 value={llmProvider}
-                onChange={(e) => setLlmProvider(e.target.value)}
+                onChange={(e) => handleProviderChange(e.target.value)}
                 required
                 className="w-full border border-black bg-white px-3 py-2 font-mono text-sm text-black focus:outline-none focus:ring-2 focus:ring-black"
               >
@@ -243,7 +253,7 @@ export default function SignupPage() {
                 value={llmModel}
                 onChange={(e) => setLlmModel(e.target.value)}
                 className="w-full border border-black bg-white px-3 py-2 font-mono text-sm text-black placeholder-black/30 focus:outline-none focus:ring-2 focus:ring-black"
-                placeholder="e.g. gpt-4o-mini"
+                placeholder={DEFAULT_MODELS[llmProvider] ?? 'e.g. gpt-4o-mini'}
               />
             </div>
 
@@ -318,34 +328,9 @@ export default function SignupPage() {
                 className="w-full border border-black bg-white px-3 py-2 font-mono text-sm text-black placeholder-black/30 focus:outline-none focus:ring-2 focus:ring-black"
                 placeholder="1234567890:AAF..."
               />
-            </div>
-
-            <div className="space-y-1">
-              <label htmlFor="tg-secret" className="font-mono text-xs uppercase tracking-widest text-black">
-                Webhook Secret
-              </label>
-              <input
-                id="tg-secret"
-                type="password"
-                value={telegramWebhookSecret}
-                onChange={(e) => setTelegramWebhookSecret(e.target.value)}
-                className="w-full border border-black bg-white px-3 py-2 font-mono text-sm text-black placeholder-black/30 focus:outline-none focus:ring-2 focus:ring-black"
-                placeholder="random-secret"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label htmlFor="tg-url" className="font-mono text-xs uppercase tracking-widest text-black">
-                Webhook URL
-              </label>
-              <input
-                id="tg-url"
-                type="text"
-                value={telegramWebhookUrl}
-                onChange={(e) => setTelegramWebhookUrl(e.target.value)}
-                className="w-full border border-black bg-white px-3 py-2 font-mono text-sm text-black placeholder-black/30 focus:outline-none focus:ring-2 focus:ring-black"
-                placeholder="https://yourdomain.com"
-              />
+              <p className="font-mono text-xs text-black/40 pt-1">
+                You can find your webhook URL in Settings after signup.
+              </p>
             </div>
 
             <div className="flex gap-3">

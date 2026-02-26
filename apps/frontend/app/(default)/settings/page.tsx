@@ -140,8 +140,6 @@ export default function SettingsPage() {
 
   // Telegram state
   const [telegramBotToken, setTelegramBotToken] = useState('');
-  const [telegramWebhookSecret, setTelegramWebhookSecret] = useState('');
-  const [telegramWebhookUrl, setTelegramWebhookUrl] = useState('');
   const [hasTelegramConfig, setHasTelegramConfig] = useState(false);
   const [telegramStatus, setTelegramStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [telegramError, setTelegramError] = useState<string | null>(null);
@@ -151,7 +149,6 @@ export default function SettingsPage() {
   useEffect(() => {
     if (user) {
       setHasTelegramConfig(Boolean(user.telegram_bot_token));
-      setTelegramWebhookUrl(user.telegram_webhook_url || '');
     }
   }, [user]);
 
@@ -517,13 +514,10 @@ export default function SettingsPage() {
     try {
       const updates: Record<string, string> = {};
       if (telegramBotToken.trim()) updates.telegram_bot_token = telegramBotToken.trim();
-      if (telegramWebhookSecret.trim()) updates.telegram_webhook_secret = telegramWebhookSecret.trim();
-      updates.telegram_webhook_url = telegramWebhookUrl.trim();
 
       await updateTelegramConfig(updates);
       await refreshUser();
       setTelegramBotToken('');
-      setTelegramWebhookSecret('');
       setTelegramStatus('saved');
       setTimeout(() => setTelegramStatus('idle'), 2000);
     } catch (err) {
@@ -532,19 +526,13 @@ export default function SettingsPage() {
     }
   };
 
-  // Disconnect Telegram (clear all fields)
+  // Disconnect Telegram (clear bot token)
   const handleTelegramDisconnect = async () => {
     setTelegramStatus('saving');
     setTelegramError(null);
     try {
-      await updateTelegramConfig({
-        telegram_bot_token: '',
-        telegram_webhook_secret: '',
-        telegram_webhook_url: '',
-      });
+      await updateTelegramConfig({ telegram_bot_token: '' });
       setTelegramBotToken('');
-      setTelegramWebhookSecret('');
-      setTelegramWebhookUrl('');
       await refreshUser();
       setTelegramStatus('saved');
       setTimeout(() => setTelegramStatus('idle'), 2000);
@@ -1111,8 +1099,8 @@ export default function SettingsPage() {
             </div>
 
             <p className="text-sm text-gray-600">
-              Connect a Telegram bot to interact with Resume Matcher via chat. All three fields are
-              required to activate the integration.
+              Connect a Telegram bot to interact with Resume Matcher via chat. Enter your bot token
+              and the webhook will be registered automatically.
             </p>
 
             <div className="grid gap-6">
@@ -1137,38 +1125,6 @@ export default function SettingsPage() {
                 )}
               </div>
 
-              {/* Webhook Secret */}
-              <div className="space-y-2">
-                <Label htmlFor="tg-secret">
-                  Webhook Secret{' '}
-                  {hasTelegramConfig && (
-                    <span className="text-gray-400 font-normal">(configured)</span>
-                  )}
-                </Label>
-                <Input
-                  id="tg-secret"
-                  type="password"
-                  value={telegramWebhookSecret}
-                  onChange={(e) => setTelegramWebhookSecret(e.target.value)}
-                  placeholder={hasTelegramConfig ? 'Leave blank to keep existing secret' : 'random-secret'}
-                  className="font-mono"
-                />
-              </div>
-
-              {/* Webhook URL */}
-              <div className="space-y-2">
-                <Label htmlFor="tg-url">Webhook URL</Label>
-                <Input
-                  id="tg-url"
-                  value={telegramWebhookUrl}
-                  onChange={(e) => setTelegramWebhookUrl(e.target.value)}
-                  placeholder="https://yourdomain.com"
-                  className="font-mono"
-                />
-                <p className="text-xs text-gray-500 font-mono">
-                  Public URL where Telegram sends webhook events to your deployment
-                </p>
-              </div>
 
               {/* Action buttons */}
               <div className="flex gap-4">
