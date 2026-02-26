@@ -672,7 +672,7 @@ const ResumeBuilderContent = () => {
               )}
 
               {/* Cover letter tab actions */}
-              {activeTab === 'cover-letter' && coverLetter && (
+              {activeTab === 'cover-letter' && (
                 <>
                   <Button
                     variant="outline"
@@ -685,22 +685,24 @@ const ResumeBuilderContent = () => {
                     ) : (
                       <Sparkles className="w-4 h-4" />
                     )}
-                    {t('coverLetter.regenerate')}
+                    {coverLetter ? t('coverLetter.regenerate') : t('coverLetter.generate')}
                   </Button>
-                  <Button
-                    variant="success"
-                    size="sm"
-                    onClick={handleDownloadCoverLetter}
-                    disabled={!resumeId || isDownloading}
-                  >
-                    <Download className="w-4 h-4" />
-                    {isDownloading ? t('common.generating') : t('common.download')}
-                  </Button>
+                  {coverLetter && (
+                    <Button
+                      variant="success"
+                      size="sm"
+                      onClick={handleDownloadCoverLetter}
+                      disabled={!resumeId || isDownloading}
+                    >
+                      <Download className="w-4 h-4" />
+                      {isDownloading ? t('common.generating') : t('common.download')}
+                    </Button>
+                  )}
                 </>
               )}
 
               {/* Outreach tab actions */}
-              {activeTab === 'outreach' && outreachMessage && (
+              {activeTab === 'outreach' && (
                 <>
                   <Button
                     variant="outline"
@@ -713,21 +715,23 @@ const ResumeBuilderContent = () => {
                     ) : (
                       <Sparkles className="w-4 h-4" />
                     )}
-                    {t('outreach.regenerate')}
+                    {outreachMessage ? t('outreach.regenerate') : t('outreach.generate')}
                   </Button>
-                  <Button variant="success" size="sm" onClick={handleCopyOutreach}>
-                    {isCopied ? (
-                      <>
-                        <Check className="w-4 h-4" />
-                        {t('outreach.copied')}
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-4 h-4" />
-                        {t('outreach.copyToClipboard')}
-                      </>
-                    )}
-                  </Button>
+                  {outreachMessage && (
+                    <Button variant="success" size="sm" onClick={handleCopyOutreach}>
+                      {isCopied ? (
+                        <>
+                          <Check className="w-4 h-4" />
+                          {t('outreach.copied')}
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-4 h-4" />
+                          {t('outreach.copyToClipboard')}
+                        </>
+                      )}
+                    </Button>
+                  )}
                 </>
               )}
             </div>
@@ -854,12 +858,10 @@ const ResumeBuilderContent = () => {
                   {
                     id: 'cover-letter',
                     label: t('builder.previewTabs.coverLetter'),
-                    disabled: !coverLetter,
                   },
                   {
                     id: 'outreach',
                     label: t('builder.previewTabs.outreach'),
-                    disabled: !outreachMessage,
                   },
                   {
                     id: 'jd-match',
