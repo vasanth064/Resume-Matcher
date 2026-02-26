@@ -12,10 +12,11 @@ services:
     image: resume-matcher
     container_name: resume-matcher
     # Port mapping: HOST_PORT:CONTAINER_PORT
-    # Customize host ports via environment variables (container ports are fixed)
+    # start.sh binds to FRONTEND_PORT/BACKEND_PORT inside the container,
+    # so both sides of the mapping must use the same value.
     ports:
-      - "${FRONTEND_PORT:-3211}:3000"   # Frontend (Next.js)
-      - "${BACKEND_PORT:-3210}:8000"    # Backend API (FastAPI)
+      - "${FRONTEND_PORT:-3211}:${FRONTEND_PORT:-3211}"   # Frontend (Next.js)
+      - "${BACKEND_PORT:-3210}:${BACKEND_PORT:-3210}"     # Backend API (FastAPI)
     volumes:
       - resume-data:/app/backend/data
     environment:
@@ -36,8 +37,7 @@ services:
       - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
     restart: unless-stopped
     healthcheck:
-      # Health check uses internal container port (always 8000)
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      test: ["CMD", "sh", "-c", "curl -f http://localhost:${BACKEND_PORT:-3210}/api/v1/health"]
       interval: 30s
       timeout: 10s
       retries: 3
