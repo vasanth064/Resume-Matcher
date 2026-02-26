@@ -7,13 +7,77 @@
 export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 export const API_BASE = `${API_URL}/api/v1`;
 
+export function getAuthHeader(): Record<string, string> {
+  if (typeof window === 'undefined') return {};
+  const token = localStorage.getItem('resume_matcher_access_token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function clearAuthAndRedirect(): void {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem('resume_matcher_access_token');
+  localStorage.removeItem('resume_matcher_refresh_token');
+  window.location.href = '/auth/login';
+}
+
+async function withTokenRefresh(
+  fn: (token: string | null) => Promise<Response>
+): Promise<Response> {
+  const token =
+    typeof window !== 'undefined'
+      ? localStorage.getItem('resume_matcher_access_token')
+      : null;
+
+  const res = await fn(token);
+
+  if (res.status !== 401) return res;
+
+  const refreshToken =
+    typeof window !== 'undefined'
+      ? localStorage.getItem('resume_matcher_refresh_token')
+      : null;
+
+  if (!refreshToken) {
+    clearAuthAndRedirect();
+    return res;
+  }
+
+  try {
+    const refreshRes = await fetch(`${API_BASE}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+
+    if (!refreshRes.ok) {
+      clearAuthAndRedirect();
+      return res;
+    }
+
+    const data = await refreshRes.json();
+    localStorage.setItem('resume_matcher_access_token', data.access_token);
+    localStorage.setItem('resume_matcher_refresh_token', data.refresh_token);
+
+    return fn(data.access_token);
+  } catch {
+    clearAuthAndRedirect();
+    return res;
+  }
+}
+
 /**
  * Standard fetch wrapper with common error handling.
+ * Injects Authorization header and handles 401 with token refresh.
  * Returns the Response object for flexibility.
  */
 export async function apiFetch(endpoint: string, options?: RequestInit): Promise<Response> {
   const url = endpoint.startsWith('http') ? endpoint : `${API_BASE}${endpoint}`;
-  return fetch(url, options);
+
+  return withTokenRefresh((token) => {
+    const headers = new Headers(options?.headers);
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+    return fetch(url, { ...options, headers });
+  });
 }
 
 /**

@@ -18,7 +18,7 @@ from app import __version__
 from app.config import settings
 from app.database import db
 from app.pdf import close_pdf_renderer, init_pdf_renderer
-from app.routers import config_router, enrichment_router, health_router, jobs_router, resumes_router, telegram_router
+from app.routers import auth_router, config_router, enrichment_router, health_router, jobs_router, resumes_router, telegram_router
 from app.routers.telegram import get_client as get_telegram_client, set_client as set_telegram_client
 from app.services.telegram import TelegramClient
 
@@ -82,6 +82,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(health_router, prefix="/api/v1")
+app.include_router(auth_router, prefix="/api/v1")
 app.include_router(config_router, prefix="/api/v1")
 app.include_router(resumes_router, prefix="/api/v1")
 app.include_router(jobs_router, prefix="/api/v1")

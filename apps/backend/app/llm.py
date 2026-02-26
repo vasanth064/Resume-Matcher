@@ -3,6 +3,7 @@
 import json
 import logging
 import re
+from contextvars import ContextVar
 from typing import Any
 
 import litellm
@@ -59,6 +60,17 @@ class LLMConfig(BaseModel):
     model: str
     api_key: str
     api_base: str | None = None
+
+
+# Per-request LLM config (set by get_current_user dependency for each authenticated request)
+_request_llm_config: ContextVar["LLMConfig | None"] = ContextVar(
+    "_request_llm_config", default=None
+)
+
+
+def set_request_llm_config(config: "LLMConfig") -> None:
+    """Set the per-request LLM config from the authenticated user's settings."""
+    _request_llm_config.set(config)
 
 
 def _normalize_api_base(provider: str, api_base: str | None) -> str | None:
@@ -230,8 +242,12 @@ def _load_stored_config() -> dict:
 def get_llm_config() -> LLMConfig:
     """Get current LLM configuration.
 
-    Priority: config.json file > environment variables/settings
+    Priority: per-request user config > config.json file > environment variables/settings
     """
+    per_request = _request_llm_config.get()
+    if per_request is not None:
+        return per_request
+
     stored = _load_stored_config()
 
     return LLMConfig(

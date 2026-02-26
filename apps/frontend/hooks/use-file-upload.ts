@@ -225,9 +225,18 @@ export const useFileUpload = (
 
       markUploadStarted();
 
+      const authToken =
+        typeof window !== 'undefined'
+          ? localStorage.getItem('resume_matcher_access_token')
+          : null;
+      const authHeaders: Record<string, string> = authToken
+        ? { Authorization: `Bearer ${authToken}` }
+        : {};
+
       try {
         const response = await fetch(uploadUrl, {
           method: 'POST',
+          headers: authHeaders,
           body: formData,
         });
 

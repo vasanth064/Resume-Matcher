@@ -135,6 +135,12 @@ class Settings(BaseSettings):
             return "openai"
         return v
 
+    # Authentication
+    jwt_secret: str = "change-me-in-production"  # Set JWT_SECRET env var
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 30
+    refresh_token_expire_days: int = 7
+
     # Telegram Bot
     telegram_bot_token: str = ""
     telegram_webhook_secret: str = ""

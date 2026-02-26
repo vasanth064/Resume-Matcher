@@ -8,21 +8,21 @@ services:
       # If you change BACKEND_PORT, you must rebuild with matching NEXT_PUBLIC_API_URL:
       #   BACKEND_PORT=9000 docker-compose build --build-arg NEXT_PUBLIC_API_URL=http://localhost:9000
       args:
-        - NEXT_PUBLIC_API_URL=http://localhost:${BACKEND_PORT:-8000}
+        - NEXT_PUBLIC_API_URL=http://localhost:${BACKEND_PORT:-3210}
     image: resume-matcher
     container_name: resume-matcher
     # Port mapping: HOST_PORT:CONTAINER_PORT
     # Customize host ports via environment variables (container ports are fixed)
     ports:
-      - "${FRONTEND_PORT:-3000}:3000"   # Frontend (Next.js)
-      - "${BACKEND_PORT:-8000}:8000"    # Backend API (FastAPI)
+      - "${FRONTEND_PORT:-3211}:3000"   # Frontend (Next.js)
+      - "${BACKEND_PORT:-3210}:8000"    # Backend API (FastAPI)
     volumes:
       - resume-data:/app/backend/data
     environment:
       - NODE_ENV=production
       # Pass port configuration to container for internal use
-      - FRONTEND_PORT=${FRONTEND_PORT:-3000}
-      - BACKEND_PORT=${BACKEND_PORT:-8000}
+      - FRONTEND_PORT=${FRONTEND_PORT:-3211}
+      - BACKEND_PORT=${BACKEND_PORT:-3210}
       # LLM Configuration - configure via Settings UI or set env vars for explicit overrides
       # Supported providers: openai, anthropic, openrouter, gemini, deepseek, ollama
       # Defaults are defined in apps/backend/app/config.py
@@ -32,6 +32,8 @@ services:
       # For Ollama running on host machine, use host.docker.internal:
       # - LLM_API_BASE=http://host.docker.internal:11434
       - LLM_API_BASE=${LLM_API_BASE:-}
+      # Authentication — set a strong random secret in production
+      - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
     restart: unless-stopped
     healthcheck:
       # Health check uses internal container port (always 8000)
