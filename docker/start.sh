@@ -136,14 +136,32 @@ echo ""
 info "Starting frontend server on port ${FRONTEND_PORT}..."
 cd /app/frontend
 
-# Next.js uses PORT environment variable
+# Next.js uses PORT and HOSTNAME environment variables.
+# HOSTNAME=0.0.0.0 ensures the server binds to all interfaces (IPv4 + IPv6),
+# which is required for Playwright (running inside the same container) to
+# connect via localhost for PDF generation.
 export PORT="${FRONTEND_PORT}"
+export HOSTNAME="0.0.0.0"
 if [ ! -f "server.js" ]; then
     error "Missing frontend standalone server.js. Rebuild the Docker image."
     exit 1
 fi
 node server.js &
 FRONTEND_PID=$!
+
+# Wait for frontend to be ready before accepting traffic
+info "Waiting for frontend to be ready..."
+for i in {1..30}; do
+    if curl -s "http://localhost:${FRONTEND_PORT}" > /dev/null 2>&1; then
+        status "Frontend is ready (PID: $FRONTEND_PID)"
+        break
+    fi
+    if [ $i -eq 30 ]; then
+        error "Frontend failed to start within 30 seconds"
+        exit 1
+    fi
+    sleep 1
+done
 
 echo ""
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
