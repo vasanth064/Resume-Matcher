@@ -73,7 +73,9 @@ async function withTokenRefresh(
  * Returns the Response object for flexibility.
  */
 export async function apiFetch(endpoint: string, options?: RequestInit): Promise<Response> {
-  const url = endpoint.startsWith('http') ? endpoint : `${API_BASE}${endpoint}`;
+  const url = (endpoint.startsWith('http') || endpoint.startsWith(API_BASE))
+    ? endpoint
+    : `${API_BASE}${endpoint}`;
 
   return withTokenRefresh((token) => {
     const headers = new Headers(options?.headers);
