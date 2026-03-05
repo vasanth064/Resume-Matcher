@@ -24,6 +24,8 @@ services:
       # Pass port configuration to container for internal use
       - FRONTEND_PORT=${FRONTEND_PORT:-3211}
       - BACKEND_PORT=${BACKEND_PORT:-3210}
+      # Tell the backend where to find the frontend for PDF generation (Playwright)
+      - FRONTEND_BASE_URL=http://localhost:${FRONTEND_PORT:-3211}
       # LLM Configuration - configure via Settings UI or set env vars for explicit overrides
       # Supported providers: openai, anthropic, openrouter, gemini, deepseek, ollama
       # Defaults are defined in apps/backend/app/config.py
