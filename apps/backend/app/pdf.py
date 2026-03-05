@@ -132,7 +132,10 @@ async def _render_page_to_pdf(
     selector: str,
     pdf_format: str,
     pdf_margins: dict,
+    auth_token: Optional[str] = None,
 ) -> bytes:
+    if auth_token:
+        await page.set_extra_http_headers({"Authorization": f"Bearer {auth_token}"})
     await page.goto(url, wait_until="networkidle")
     await page.wait_for_selector(selector)
     await page.evaluate("document.fonts.ready")
@@ -149,10 +152,11 @@ async def _render_with_browser(
     selector: str,
     pdf_format: str,
     pdf_margins: dict,
+    auth_token: Optional[str] = None,
 ) -> bytes:
     page: Page = await browser.new_page()
     try:
-        return await _render_page_to_pdf(page, url, selector, pdf_format, pdf_margins)
+        return await _render_page_to_pdf(page, url, selector, pdf_format, pdf_margins, auth_token)
     finally:
         await page.close()
 
@@ -181,13 +185,14 @@ def _render_resume_pdf_sync(
     selector: str,
     pdf_format: str,
     pdf_margins: dict,
+    auth_token: Optional[str] = None,
 ) -> bytes:
     async def _run() -> bytes:
         async with async_playwright() as playwright:
             browser = await _launch_browser(playwright)
             try:
                 return await _render_with_browser(
-                    browser, url, selector, pdf_format, pdf_margins
+                    browser, url, selector, pdf_format, pdf_margins, auth_token
                 )
             finally:
                 await browser.close()
@@ -200,9 +205,10 @@ async def _render_resume_pdf_in_thread(
     selector: str,
     pdf_format: str,
     pdf_margins: dict,
+    auth_token: Optional[str] = None,
 ) -> bytes:
     return await asyncio.to_thread(
-        _render_resume_pdf_sync, url, selector, pdf_format, pdf_margins
+        _render_resume_pdf_sync, url, selector, pdf_format, pdf_margins, auth_token
     )
 
 
@@ -253,6 +259,7 @@ async def render_resume_pdf(
     page_size: str = "A4",
     selector: str = ".resume-print",
     margins: Optional[dict] = None,
+    auth_token: Optional[str] = None,
 ) -> bytes:
     """Render a URL to PDF bytes.
 
@@ -273,7 +280,7 @@ async def render_resume_pdf(
 
     if _browser is not None:
         try:
-            return await _render_with_browser(_browser, url, selector, pdf_format, pdf_margins)
+            return await _render_with_browser(_browser, url, selector, pdf_format, pdf_margins, auth_token)
         except PlaywrightError as e:
             _raise_playwright_error(e, url)
 
@@ -296,7 +303,7 @@ async def render_resume_pdf(
     if not subprocess_supported:
         try:
             return await _render_resume_pdf_in_thread(
-                url, selector, pdf_format, pdf_margins
+                url, selector, pdf_format, pdf_margins, auth_token
             )
         except PlaywrightError as e:
             _raise_playwright_error(e, url)
@@ -305,6 +312,6 @@ async def render_resume_pdf(
         raise PDFRenderError("PDF renderer failed to initialize.")
 
     try:
-        return await _render_with_browser(_browser, url, selector, pdf_format, pdf_margins)
+        return await _render_with_browser(_browser, url, selector, pdf_format, pdf_margins, auth_token)
     except PlaywrightError as e:
         _raise_playwright_error(e, url)

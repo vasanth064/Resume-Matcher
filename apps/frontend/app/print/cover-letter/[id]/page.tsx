@@ -5,6 +5,7 @@
  * Uses the same API fetch pattern as the resume print page.
  */
 
+import { headers } from 'next/headers';
 import { API_BASE } from '@/lib/api/client';
 import { translate } from '@/lib/i18n/server';
 import { resolveLocale } from '@/lib/i18n/locale';
@@ -37,9 +38,10 @@ interface CoverLetterData {
   personalInfo: PersonalInfo;
 }
 
-async function fetchCoverLetterData(resumeId: string): Promise<CoverLetterData> {
+async function fetchCoverLetterData(resumeId: string, authHeader: string | null): Promise<CoverLetterData> {
   const res = await fetch(`${API_BASE}/resumes?resume_id=${encodeURIComponent(resumeId)}`, {
     cache: 'no-store',
+    headers: authHeader ? { Authorization: authHeader } : {},
   });
   if (!res.ok) {
     throw new Error(`Failed to load resume (status ${res.status}).`);
@@ -75,7 +77,8 @@ export default async function PrintCoverLetterPage({ params, searchParams }: Pag
   const locale = resolveLocale(resolvedSearchParams?.lang);
 
   // Fetch cover letter data from API (same pattern as resume)
-  const { coverLetter, personalInfo } = await fetchCoverLetterData(resolvedParams.id);
+  const headersList = await headers();
+  const { coverLetter, personalInfo } = await fetchCoverLetterData(resolvedParams.id, headersList.get('authorization'));
 
   // Standard cover letter margins
   const margins = { top: 25, right: 25, bottom: 25, left: 25 };

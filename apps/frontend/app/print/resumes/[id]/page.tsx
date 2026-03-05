@@ -9,6 +9,7 @@ import {
   type AccentColor,
   DEFAULT_TEMPLATE_SETTINGS,
 } from '@/lib/types/template-settings';
+import { headers } from 'next/headers';
 import { API_BASE } from '@/lib/api/client';
 import { translate } from '@/lib/i18n/server';
 import { resolveLocale } from '@/lib/i18n/locale';
@@ -76,9 +77,10 @@ function parseBoolean(value: string | undefined, defaultValue: boolean): boolean
   return defaultValue;
 }
 
-async function fetchResumeData(id: string): Promise<ResumeData> {
+async function fetchResumeData(id: string, authHeader: string | null): Promise<ResumeData> {
   const res = await fetch(`${API_BASE}/resumes?resume_id=${encodeURIComponent(id)}`, {
     cache: 'no-store',
+    headers: authHeader ? { Authorization: authHeader } : {},
   });
   if (!res.ok) {
     throw new Error(`Failed to load resume (status ${res.status}).`);
@@ -154,7 +156,8 @@ function parsePageSize(value: string | undefined): PageSize {
 export default async function PrintResumePage({ params, searchParams }: PageProps) {
   const resolvedParams = await params;
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
-  const resumeData = await fetchResumeData(resolvedParams.id);
+  const headersList = await headers();
+  const resumeData = await fetchResumeData(resolvedParams.id, headersList.get('authorization'));
   const locale = resolveLocale(resolvedSearchParams?.lang);
   const t = (key: string, params?: Record<string, string | number>) =>
     translate(locale, key, params);

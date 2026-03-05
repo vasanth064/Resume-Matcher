@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, NoReturn
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 
 from app.database import db
@@ -1042,6 +1042,7 @@ async def download_resume_pdf(
     showContactIcons: bool = Query(False),
     accentColor: str = Query("blue", pattern="^(blue|green|orange|red)$"),
     lang: str | None = Query(None, pattern="^[a-z]{2}(-[A-Z]{2})?$"),
+    authorization: str = Header(...),
     current_user: dict = Depends(get_current_user),
 ) -> Response:
     """Generate a PDF for a resume using headless Chromium.
@@ -1097,8 +1098,10 @@ async def download_resume_pdf(
     }
 
     # Render PDF with margins applied to every page
+    # Pass the bearer token so Playwright can authenticate the print page's SSR fetch
+    auth_token = authorization.removeprefix("Bearer ")
     try:
-        pdf_bytes = await render_resume_pdf(url, pageSize, margins=pdf_margins)
+        pdf_bytes = await render_resume_pdf(url, pageSize, margins=pdf_margins, auth_token=auth_token)
     except PDFRenderError as e:
         raise HTTPException(status_code=503, detail=str(e))
 
@@ -1430,6 +1433,7 @@ async def download_cover_letter_pdf(
     resume_id: str,
     pageSize: str = Query("A4", pattern="^(A4|LETTER)$"),
     lang: str | None = Query(None, pattern="^[a-z]{2}(-[A-Z]{2})?$"),
+    authorization: str = Header(...),
     current_user: dict = Depends(get_current_user),
 ) -> Response:
     """Generate a PDF for a cover letter using headless Chromium.
@@ -1455,9 +1459,11 @@ async def download_cover_letter_pdf(
         url = f"{url}&lang={lang}"
 
     # Render PDF with cover letter selector
+    # Pass the bearer token so Playwright can authenticate the print page's SSR fetch
+    auth_token = authorization.removeprefix("Bearer ")
     try:
         pdf_bytes = await render_resume_pdf(
-            url, pageSize, selector=".cover-letter-print"
+            url, pageSize, selector=".cover-letter-print", auth_token=auth_token
         )
     except PDFRenderError as e:
         raise HTTPException(status_code=503, detail=str(e))
