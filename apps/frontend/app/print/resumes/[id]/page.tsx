@@ -10,7 +10,7 @@ import {
   DEFAULT_TEMPLATE_SETTINGS,
 } from '@/lib/types/template-settings';
 import { headers } from 'next/headers';
-import { API_BASE } from '@/lib/api/client';
+import { API_URL } from '@/lib/api/client';
 import { translate } from '@/lib/i18n/server';
 import { resolveLocale } from '@/lib/i18n/locale';
 import { withLocalizedDefaultSections } from '@/lib/utils/section-helpers';
@@ -78,7 +78,7 @@ function parseBoolean(value: string | undefined, defaultValue: boolean): boolean
 }
 
 async function fetchResumeData(id: string, authHeader: string | null): Promise<ResumeData> {
-  const res = await fetch(`${API_BASE}/resumes?resume_id=${encodeURIComponent(id)}`, {
+  const res = await fetch(`${API_URL}/api/v1/resumes?resume_id=${encodeURIComponent(id)}`, {
     cache: 'no-store',
     headers: authHeader ? { Authorization: authHeader } : {},
   });
