@@ -34,13 +34,15 @@ async def get_status(current_user: dict[str, Any] = Depends(get_current_user)) -
     """
     user_id: str = current_user["user_id"]
     config = get_llm_config()
-    llm_status = await check_llm_health(config)
+    # Check config only — no live LLM call here to keep the endpoint fast.
+    # Full LLM health check (with actual API call) is available via GET /config/llm.
+    llm_configured = bool(config.api_key) or config.provider == "ollama"
     db_stats = db.get_stats(user_id)
 
     return StatusResponse(
-        status="ready" if llm_status["healthy"] and db_stats["has_master_resume"] else "setup_required",
-        llm_configured=bool(config.api_key) or config.provider == "ollama",
-        llm_healthy=llm_status["healthy"],
+        status="ready" if llm_configured and db_stats["has_master_resume"] else "setup_required",
+        llm_configured=llm_configured,
+        llm_healthy=llm_configured,
         has_master_resume=db_stats["has_master_resume"],
         database_stats=db_stats,
     )
